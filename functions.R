@@ -1,3 +1,6 @@
+# !diagnostics off
+# The line above is to remove the annoying error messges by dplyr that are all bugs.
+
 # General functions -------------------------------------------------------
 on_Midway <- function(){
   if (Sys.getenv('USER')=='pilosofs'){
