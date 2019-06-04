@@ -764,3 +764,96 @@ pdf('/home/shai/Dropbox/Images for presentations/BGU Job talk/Fig_empirical_comp
 png('/home/shai/Dropbox/Images for presentations/BGU Job talk/Fig_empirical_comparison_B.png',1600,1600,res=200)
 panel_B
 dev.off()
+
+
+# Plot empirical network --------------------------------------------------
+setwd('/media/Data/PLOS_Biol/empirical/')
+
+cutoff_prob_empirical <- 0.978
+
+# Get empirical distributions BEFORE CUTOFF
+intralayer_matrices_empirical <- list(empiricalLayer_1, empiricalLayer_2, empiricalLayer_3, empiricalLayer_4,empiricalLayer_5,empiricalLayer_6)
+interlayer_matrices_empirical <- build_interlayer_empirical(data_allleles)
+intralayer_edges_empirical <- tibble(layer=rep(1:6,times=sapply(intralayer_matrices_empirical, function(z) ncol(z)*nrow(z))),
+                                     w=unlist(sapply(intralayer_matrices_empirical, as.vector)),
+                                     scenario='Empirical',
+                                     grp='intra')
+interlayer_edges_empirical <- tibble(layer=rep(1:5,times=sapply(interlayer_matrices_empirical, function(z) ncol(z)*nrow(z))),
+                                     w=unlist(sapply(interlayer_matrices_empirical, as.vector)),
+                                     scenario='Empirical',
+                                     grp='inter')
+empirical_edge_weights <- rbind(intralayer_edges_empirical,interlayer_edges_empirical)
+cutoff_value <- quantile(empirical_edge_weights$w, probs = cutoff_prob_empirical)
+# Apply cutoff to layers
+for (i in 1:length(intralayer_matrices_empirical)){
+  # print(i)
+  x <- intralayer_matrices_empirical[[i]]
+  x[x<cutoff_value] <- 0
+  intralayer_matrices_empirical[[i]] <- x
+}
+# Apply cutoff to inter-layer blocks
+for (i in 1:length(interlayer_matrices_empirical)){
+  # print(i)
+  x <- interlayer_matrices_empirical[[i]]
+  x[x<cutoff_value] <- 0
+  interlayer_matrices_empirical[[i]] <- x
+}
+
+
+network_object <- vector(mode = 'list', length = 2)
+names(network_object) <- c('intralayer_matrices','interlayer_matrices')
+network_object$intralayer_matrices <- intralayer_matrices_empirical
+network_object$interlayer_matrices <- interlayer_matrices_empirical
+
+infomap_empirical <- build_infomap_objects(network_object = network_object,  
+                                           write_to_infomap_file = T,
+                                           infomap_file_name = 'infomap_empirical.txt', 
+                                           return_objects = T,
+                                           rescale_by_survival_prob = F,
+                                           repertoire_survival_prob = NULL)
+
+
+system("./Infomap_v01926 infomap_empirical.txt . -i multilayer -d -N 50 --two-level --rawdir --tree --expanded --silent --seed 1000")
+modules_empirical <- read_infomap_empirical(infomap_empirical, cutoff_prob_empirical)
+module_persistence <- modules_empirical %>% group_by(module) %>% summarise(b=min(layer),d=max(layer)) %>% mutate(persistence=d-b+1)
+module_persistence %>% group_by(persistence) %>% summarise(modules=length(unique(module)))
+table(module_persistence$persistence)/sum(table(module_persistence$persistence))
+
+to_igraph_edges <- infomap_empirical$infomap_intralayer %>% 
+  mutate(state_node_s=paste(node_s,layer_s,sep='_')) %>% 
+  mutate(state_node_t=paste(node_t,layer_t,sep='_')) %>% 
+  select(state_node_s, state_node_t, w, layer=layer_s)  
+
+to_igraph_nodes <- modules_empirical %>% 
+  mutate(state_node=paste(nodeID,layer,sep='_')) %>% 
+  select(state_node, module)
+color_table=tibble(module=sort(unique(to_igraph_nodes$module)), module_color=gg_color_hue(max(to_igraph_nodes$module)))
+to_igraph_nodes %<>% left_join(color_table) %>% left_join(module_persistence)
+to_igraph_nodes %<>% mutate(module_color=ifelse(persistence<3, 'gray', module_color))
+g <- igraph::graph.data.frame(to_igraph_edges, vertices = to_igraph_nodes)
+edge.attributes(g)
+vertex.attributes(g)
+
+layer_plots <- NULL
+for (l in 1:6){
+  current_layer <- subgraph.edges(g, eids=which(E(g)$layer==l), delete.vertices = T)
+  unique(vertex.attributes(current_layer)$module_color)
+  layer_plots[[l]] <- ggplot(current_layer, aes(x = x, y = y, xend = xend, yend = yend), arrow.gap=0.01, layout='circle') +
+    geom_edges(color = "grey50", arrow = arrow(length = unit(5, "pt"), type = "closed"), curvature = 0.1) +
+    geom_nodes(aes(color = module_color), size=6, alpha=1) +
+    scale_color_identity()+
+    theme_blank()+
+    theme(legend.position='none')
+}
+svg('/home/shai/Dropbox/Images for presentations/Malaria/EEID2019/empirical_network.svg',16,9)
+png('/home/shai/Dropbox/Images for presentations/Malaria/EEID2019/empirical_network.png',1920,1200, res=150)
+plot_grid(plotlist = layer_plots, nrow=2, ncol=3, scale = 0.8)
+dev.off()
+
+
+ggplot(g, aes(x = x, y = y, xend = xend, yend = yend), arrow.gap = 0.04, by = "layer") +
+  geom_nodes(aes(color = color)) +
+  geom_edges(color = "grey50", arrow = arrow(length = unit(3, "pt"), type = "closed")) +
+  facet_wrap(~layer)+
+  theme_facet()+
+  theme(legend.position='none')

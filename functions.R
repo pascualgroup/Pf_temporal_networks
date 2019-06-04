@@ -855,9 +855,10 @@ generate_plots <- function(data, time_range=NULL){
 
 
 plotLayer <- function(network_object, l, edge_weight_multiply=1, remove.loops=T, ver.col=NULL, coords=NULL,...) { 
+  require(igraph)
   g <- network_object$temporal_network[[l]]
   if (class(g)=='matrix'){g <- graph.adjacency(g, weighted = T, mode = 'directed')}
-  if(remove.loops){g <- simplify(g, remove.multiple = F, remove.loops = T)}
+  if(remove.loops){g <- igraph::simplify(g, remove.multiple = F, remove.loops = T)}
   # g <- delete_edges(g, which(E(g)$weight<quantile(E(g)$weight, cutoff_g))) # remove all edges smaller than the cutoff
   # layout <-layout.kamada.kawai(g)
   # plot.new()
@@ -1009,9 +1010,9 @@ get_data <- function(parameter_space, scenario, experiment, run, cutoff_prob=0.9
   
   
   if ('sampled_infections'%in%tables_to_get){
-    return(list(summary_general=as.tibble(summary_general), sampled_infections=as.tibble(sampled_infections)))
+    return(list(summary_general=as_tibble(summary_general), sampled_infections=as_tibble(sampled_infections)))
   } else {
-    return(list(summary_general=as.tibble(summary_general)))
+    return(list(summary_general=as_tibble(summary_general)))
   }
 }
 
@@ -1137,7 +1138,7 @@ get_duration_infection <- function(parameter_space, scenario, experiment, run){
   db <- dbConnect(SQLite(), dbname = sqlite_file)
   sampled_duration <- dbGetQuery(db, 'SELECT * FROM sampled_duration')
   dbDisconnect(db)
-  return(as.tibble(sampled_duration))
+  return(as_tibble(sampled_duration))
 }
 
 
@@ -1259,7 +1260,7 @@ rescale_by_divergence <- function(ps,scenario,exp,run,layers_to_include,interlay
   
   db <- dbConnect(SQLite(), dbname = sqlite_file)
   print('Getting genetic data from sqlite...')
-  summary_table <- as.tibble(dbGetQuery(db, 'SELECT time, n_infections FROM summary'))
+  summary_table <- as_tibble(dbGetQuery(db, 'SELECT time, n_infections FROM summary'))
   dbDisconnect(db)
   summary_table$layer <- group_indices(summary_table, time)
   
@@ -1323,7 +1324,7 @@ calculate_rep_survival <- function(ps,
   
   db <- dbConnect(SQLite(), dbname = sqlite_file)
   print('Getting genetic data from sqlite...')
-  summary_table <- as.tibble(dbGetQuery(db, 'SELECT time, n_infections FROM summary'))
+  summary_table <- as_tibble(dbGetQuery(db, 'SELECT time, n_infections FROM summary'))
   dbDisconnect(db)
   summary_table$layer <- group_indices(summary_table, time)
   
@@ -1388,9 +1389,9 @@ createTemporalNetwork <- function(ps,
   # Extract data from sqlite. variable names correspond to table names
   db <- dbConnect(SQLite(), dbname = sqlite_file)
   print('Getting genetic data from sqlite...')
-  sampled_strains <- as.tibble(dbGetQuery(db, 'SELECT id, gene_id FROM sampled_strains'))
+  sampled_strains <- as_tibble(dbGetQuery(db, 'SELECT id, gene_id FROM sampled_strains'))
   names(sampled_strains)[1] <- c('strain_id')
-  sampled_alleles <- as.tibble(dbGetQuery(db, 'SELECT * FROM sampled_alleles'))
+  sampled_alleles <- as_tibble(dbGetQuery(db, 'SELECT * FROM sampled_alleles'))
   names(sampled_alleles)[3] <- c('allele_id')
   sampled_strains <- full_join(sampled_strains, sampled_alleles)
   sampled_strains$allele_locus <- paste(sampled_strains$allele_id,sampled_strains$locus,sep='_') # each allele in a locus is unique
@@ -1479,7 +1480,7 @@ createTemporalNetwork <- function(ps,
                                          w=unlist(sapply(interlayer_matrices, as.vector)))
     edges <- c(intralayer_edges_no_cutoff$w,interlayer_edges_no_cutoff$w)
     cutoff_value <- quantile(edges, probs = cutoff_prob)
-    #as.tibble(edges) %>% ggplot(aes(value))+geom_density()+geom_vline(xintercept = cutoff_value)
+    #as_tibble(edges) %>% ggplot(aes(value))+geom_density()+geom_vline(xintercept = cutoff_value)
   }
   
   # Apply cutoff to layers
@@ -1502,7 +1503,7 @@ createTemporalNetwork <- function(ps,
     layer_summary$density_interlayer[i] <- sum(x>0)/(nrow(x)*ncol(x))
   }
   
-  layer_summary <- as.tibble(layer_summary)
+  layer_summary <- as_tibble(layer_summary)
   
   print('Done!')
   
@@ -1536,7 +1537,7 @@ get_edge_disributions <- function(PS, scenario, exp, run, cutoff_prob, get_inter
   x$run=run
   x$cutoff_value=cutoff_value
   x$cutoff_prob=cutoff_prob
-  # p <- as.tibble(x) %>% ggplot(aes(value))+geom_density()+geom_vline(xintercept = cutoff_value, color='red')+
+  # p <- as_tibble(x) %>% ggplot(aes(value))+geom_density()+geom_vline(xintercept = cutoff_value, color='red')+
   #   labs(title = paste('Cut-off quantile:',cutoff_prob,'Cut-off value:',cutoff_value))
   return(x)
 }
@@ -1581,7 +1582,7 @@ get_results_for_cutoff <- function(cutoff_prob_seq=seq(0.25,0.95,0.05), scenario
       print(paste('File does not exist: ',file,sep=''))
     }
   }
-  results_cutoff <- as.tibble(results_cutoff)
+  results_cutoff <- as_tibble(results_cutoff)
   return(results_cutoff)
 }
 
@@ -1668,7 +1669,7 @@ get_network_structure <- function(ps, scenario, exp, run, cutoff_prob, layers_to
   }
   
   if (plotit){
-    x <- as.tibble(network_structure$layer_summary)
+    x <- as_tibble(network_structure$layer_summary)
     print(x %>% gather(variable, value, -layer) %>% 
             ggplot(aes(layer, value, color=variable))+
             geom_line()+
@@ -1702,7 +1703,7 @@ get_network_properties <- function(network_object, layers_to_include, num_proper
   }
   close(pb)
   colnames(network_properties) <- names(tmp)
-  network_properties <- as.tibble(network_properties)
+  network_properties <- as_tibble(network_properties)
   network_properties$layer <- layers_to_include
   return(network_properties)
 }
@@ -1733,7 +1734,7 @@ get_interlayer_properties <- function(network_object, layers_to_include, num_pro
     interlayer_properties[as.character(l),7] <- mean(strength(g, vids = V(g)[V(g)$type==F]))
   }
   colnames(interlayer_properties) <- c('num_nodes_s','num_nodes_t','density_il','num_edges_il','mean_edge_weight_il','mean_strength_s','mean_strength_t')
-  interlayer_properties <- as.tibble(interlayer_properties)
+  interlayer_properties <- as_tibble(interlayer_properties)
   interlayer_properties$layer <- head(layers_to_include, -1)
   return(interlayer_properties)
 }
@@ -2024,7 +2025,7 @@ matrix_to_infomap_intralayer <- function(l, nodeList, network_object, remove_sel
     return(NULL)
   }
   g <- graph.adjacency(current_layer, mode = 'directed', weighted = T)
-  current_layer_el <- as.tibble(as_data_frame(g, what = 'edges'))
+  current_layer_el <- as_tibble(as_data_frame(g, what = 'edges'))
   names(current_layer_el) <- c('node_s','node_t','w')
   current_layer_el$layer_s <- l
   current_layer_el$layer_t <- l
@@ -2048,7 +2049,7 @@ matrix_to_infomap_interlayer <- function(l, nodeList, network_object){
     return(NULL)
   }
   g <- graph.incidence(incidence = interlayer_block, mode = 'out', weighted = T)
-  current_layer_el <- as.tibble(as_data_frame(g, what = 'edges'))
+  current_layer_el <- as_tibble(as_data_frame(g, what = 'edges'))
   names(current_layer_el) <- c('node_s','node_t','w')
   current_layer_el$layer_s <- l
   current_layer_el$layer_t <- l+1
@@ -2234,9 +2235,9 @@ infomap_readTreeFile <- function(PS, scenario, exp, run, cutoff_prob, folder='/m
     db <- dbConnect(SQLite(), dbname = paste('/media/Data/PLOS_Biol/sqlite/','PS',PS,'_',scenario,'_E',exp,'_R',run,'.sqlite',sep=''))
   }
   
-  sampled_strains <- as.tibble(dbGetQuery(db, 'SELECT id,gene_id FROM sampled_strains'))
+  sampled_strains <- as_tibble(dbGetQuery(db, 'SELECT id,gene_id FROM sampled_strains'))
   names(sampled_strains)[1] <- 'strain_id'
-  sampled_alleles <- as.tibble(dbGetQuery(db, 'SELECT * FROM sampled_alleles'))
+  sampled_alleles <- as_tibble(dbGetQuery(db, 'SELECT * FROM sampled_alleles'))
   dbDisconnect(db)
   
   print('Done!')
